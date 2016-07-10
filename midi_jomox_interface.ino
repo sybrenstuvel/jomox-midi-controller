@@ -106,12 +106,12 @@ AnalogueInput* analogue_inputs[] = {
 };
 
 // Digital inputs.
-const int BUTTON_1_PIN = 2;
+const int BUTTON_1_PIN = 4;
 int button1 = 0;
 int last_button1_read_time = 0;
 int debounced_button1 = 0;
 
-const int BUTTON_2_PIN = 4;
+const int BUTTON_2_PIN = 2;
 int button2 = 0;
 int last_button2_read_time = 0;
 int debounced_button2 = 0;
