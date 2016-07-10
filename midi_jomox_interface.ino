@@ -1,4 +1,4 @@
-#define DEBUG
+//#define DEBUG
 
 #ifndef DEBUG
 // Source of MIDI library: https://github.com/FortySevenEffects/arduino_midi_library
@@ -116,15 +116,8 @@ int button2 = 0;
 int last_button2_read_time = 0;
 int debounced_button2 = 0;
 
-const int BUTTON_3_PIN = 7;
-int button3 = 0;
-int last_button3_read_time = 0;
-int debounced_button3 = 0;
-
-const int BUTTON_4_PIN = 8;
-int button4 = 0;
-int last_button4_read_time = 0;
-int debounced_button4 = 0;
+const int LED_1_PIN = 8;
+const int LED_2_PIN = 7;
 
 
 void send_midi_control(int midi_controller_nr, int new_rounded_value, bool is_twobytes) {
@@ -250,20 +243,10 @@ void button_value_changed(int value, int input_pin) {
   switch (input_pin) {
     case BUTTON_1_PIN:
       send_midi_note(value ? 0x00 : 0x7F);
+      digitalWrite(LED_1_PIN, value ? LOW : HIGH);
       break;
     case BUTTON_2_PIN:
-      send_midi_note(value ? 0x00 : 0x3F);
-      break;
-    case BUTTON_3_PIN:
       if (!value) reset_all_knobs();
-      break;
-    case BUTTON_4_PIN:
-      if (!value) {
-#ifdef DEBUG
-        Serial.print("mplex now set to ");
-        Serial.println(last_mplex_select);
-#endif
-      }
       break;
   }
 }
@@ -278,8 +261,8 @@ void setup() {
 
   pinMode(BUTTON_1_PIN, INPUT_PULLUP);
   pinMode(BUTTON_2_PIN, INPUT_PULLUP);
-  pinMode(BUTTON_3_PIN, INPUT_PULLUP);
-  pinMode(BUTTON_4_PIN, INPUT_PULLUP);
+  pinMode(LED_1_PIN, OUTPUT);
+  pinMode(LED_2_PIN, OUTPUT);
 
   pinMode(MPLEX_DISABLE, OUTPUT);
   pinMode(MPLEX_SELECT_1, OUTPUT);
@@ -295,8 +278,6 @@ void loop() {
 
   read_button(button1, debounced_button1, BUTTON_1_PIN, last_button1_read_time);
   read_button(button2, debounced_button2, BUTTON_2_PIN, last_button2_read_time);
-  read_button(button3, debounced_button3, BUTTON_3_PIN, last_button3_read_time);
-  read_button(button4, debounced_button4, BUTTON_4_PIN, last_button4_read_time);
 
   delay(10);
 }
