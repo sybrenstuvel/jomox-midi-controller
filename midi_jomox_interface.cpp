@@ -1,4 +1,5 @@
 #include <Arduino.h>
+#include <USBAPI.h>
 #include "midi_jomox_interface.h"
 
 // #define DEBUG
