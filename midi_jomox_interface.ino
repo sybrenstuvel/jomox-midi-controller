@@ -1,7 +1,7 @@
-#define DEBUG
+//#define DEBUG
 #define DO_MIDI
 
-#if defined(DEBUG) && defined(DO_MIDI)
+#if !defined(DEBUG) && defined(DO_MIDI)
 // Source of MIDI library: https://github.com/FortySevenEffects/arduino_midi_library
 #include <MIDI.h>
 
@@ -110,8 +110,8 @@ AnalogueInput* analogue_inputs[] = {
 const int LED_1_PIN = 8;
 const int LED_2_PIN = 7;
 const int PIEZO_PEAK_THRESHOLD = 1000;
-const int PIEZO_HIT_THRESHOLD = 300;
-const long PIEZO_GATHER_MILLIS = 10;
+const int PIEZO_HIT_THRESHOLD = 700;
+const long PIEZO_GATHER_MILLIS = 20;
 
 class Piezo {
   public:
@@ -331,6 +331,8 @@ void Piezo::update()
       Serial.print("Average energy gathered in this hit: ");
       Serial.println(avg_energy);
 #endif
+      int midi_velo = min(0x7F * avg_energy / PIEZO_HIT_THRESHOLD, 0x7F);
+      send_midi_note(midi_velo);
     }
   }
 
