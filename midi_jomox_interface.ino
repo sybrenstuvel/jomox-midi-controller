@@ -1,6 +1,7 @@
-//#define DEBUG
+#define DEBUG
+#define DO_MIDI
 
-#ifndef DEBUG
+#if defined(DEBUG) && defined(DO_MIDI)
 // Source of MIDI library: https://github.com/FortySevenEffects/arduino_midi_library
 #include <MIDI.h>
 
@@ -105,6 +106,46 @@ AnalogueInput* analogue_inputs[] = {
   NULL
 };
 
+
+const int LED_1_PIN = 8;
+const int LED_2_PIN = 7;
+const int PIEZO_PEAK_THRESHOLD = 1000;
+const int PIEZO_HIT_THRESHOLD = 300;
+const long PIEZO_GATHER_MILLIS = 10;
+
+class Piezo {
+  public:
+    char name[16];
+
+    int piezo_pin;
+    int led_pin;
+
+    bool is_peaking;
+    int piezo_level;
+    int last_piezo_level;
+
+    bool seen_peak;
+    unsigned long gathering_start;
+    unsigned long gather_until;
+    unsigned long total_energy;
+    unsigned int hit_threshold;
+
+    Piezo(const char *name, int piezo_pin, int led_pin)
+      : piezo_pin(piezo_pin), led_pin(led_pin), is_peaking(false),
+        seen_peak(false), gather_until(0), total_energy(0),
+        hit_threshold(PIEZO_HIT_THRESHOLD)
+    {
+      strncpy(this->name, name, 16);
+      this->name[15] = 0;
+    }
+
+    void update();
+};
+
+Piezo piezo_head("head", A0, LED_1_PIN);
+Piezo piezo_rim("rim", A2, LED_2_PIN);
+
+
 // Digital inputs.
 const int BUTTON_1_PIN = 4;
 int button1 = 0;
@@ -116,11 +157,9 @@ int button2 = 0;
 int last_button2_read_time = 0;
 int debounced_button2 = 0;
 
-const int LED_1_PIN = 8;
-const int LED_2_PIN = 7;
-
 
 void send_midi_control(int midi_controller_nr, int new_rounded_value, bool is_twobytes) {
+#ifdef DO_MIDI
 #ifdef DEBUG
   Serial.print("MIDI CC: ctrl=");
   Serial.print(midi_controller_nr);
@@ -135,14 +174,17 @@ void send_midi_control(int midi_controller_nr, int new_rounded_value, bool is_tw
     MIDI.sendControlChange(midi_controller_nr, new_rounded_value, MIDI_CHANNEL);
   }
 #endif
+#endif
 }
 
 void send_midi_note(int velocity) {
+#ifdef DO_MIDI
 #ifdef DEBUG
   Serial.print("MIDI note: velocity=");
   Serial.println(velocity);
 #else
   MIDI.sendNoteOn(NOTE_NUMBER, velocity, MIDI_CHANNEL);
+#endif
 #endif
 }
 
@@ -168,7 +210,7 @@ void AnalogueInput::update()
   midi_value = round(smoothed_value) >> bit_shifts;
   if (last_midi_value == midi_value) return;
 
-#ifdef DEBUG
+#if defined(DEBUG) && defined(DO_MIDI)
   Serial.print("Input ");
   Serial.print(name);
   Serial.print(" @ ");
@@ -193,11 +235,17 @@ void AnalogueInput::reset()
 
 void update_controllers()
 {
-  AnalogueInput **controller = analogue_inputs;
-  while (*controller) {
-    (*controller)->update();
-    controller++;
+  static int controller_idx = 0;
+  AnalogueInput *controller = analogue_inputs[controller_idx];
+
+  if (!controller) {
+    // Reset loop
+    controller_idx = 0;
+    controller = analogue_inputs[0];
   }
+
+  controller->update();
+  controller_idx++;
 }
 
 void reset_all_knobs()
@@ -243,7 +291,6 @@ void button_value_changed(int value, int input_pin) {
   switch (input_pin) {
     case BUTTON_1_PIN:
       send_midi_note(value ? 0x00 : 0x7F);
-      digitalWrite(LED_1_PIN, value ? LOW : HIGH);
       break;
     case BUTTON_2_PIN:
       if (!value) reset_all_knobs();
@@ -251,12 +298,55 @@ void button_value_changed(int value, int input_pin) {
   }
 }
 
+
+void Piezo::update()
+{
+  unsigned long now = millis();
+
+  last_piezo_level = piezo_level;
+  piezo_level = analogRead(piezo_pin);
+
+  if (!seen_peak && last_piezo_level > hit_threshold && piezo_level < last_piezo_level) {
+    seen_peak = true;
+    gather_until = now + PIEZO_GATHER_MILLIS;
+    total_energy = last_piezo_level;
+    hit_threshold = last_piezo_level;
+
+#ifdef DEBUG
+    Serial.print("Piezo ");
+    Serial.print(name);
+    Serial.print(" was hit at level ");
+    Serial.println(last_piezo_level);
+#endif
+  }
+
+  if (seen_peak) {
+    total_energy += piezo_level;
+    float avg_energy = float(total_energy) / PIEZO_GATHER_MILLIS;
+
+    if (now > gather_until) {
+      seen_peak = false;
+      hit_threshold = PIEZO_HIT_THRESHOLD;
+#ifdef DEBUG
+      Serial.print("Average energy gathered in this hit: ");
+      Serial.println(avg_energy);
+#endif
+    }
+  }
+
+
+  digitalWrite(LED_1_PIN, seen_peak ? HIGH : LOW);
+}
+
+
 void setup() {
 #ifdef DEBUG
-  Serial.begin(38400);
+  Serial.begin(115200);
   Serial.println("Yay!");
 #else
+#ifdef DO_MIDI
   MIDI.begin(MIDI_CHANNEL);
+#endif
 #endif
 
   pinMode(BUTTON_1_PIN, INPUT_PULLUP);
@@ -279,7 +369,10 @@ void loop() {
   read_button(button1, debounced_button1, BUTTON_1_PIN, last_button1_read_time);
   read_button(button2, debounced_button2, BUTTON_2_PIN, last_button2_read_time);
 
-  delay(10);
+  noInterrupts();
+  piezo_head.update();
+  //  piezo_rim.update();
+  interrupts();
 }
 
 
