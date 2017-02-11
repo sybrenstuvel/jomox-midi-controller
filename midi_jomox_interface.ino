@@ -23,6 +23,15 @@ const int CONTROL_CHANGE = 0xC0;
 const int MIDI_CHANNEL = 10;  // base-1
 const int NOTE_NUMBER = 38;
 
+// Hit detection threshold values
+const int HDT_READ_PEAK_DURATION = 1000; // in microseconds
+const int HDT_MIDPOINT = 50000;  // time in microseconds since hit
+const int HDT_DECAY1_1 = 77;
+const int HDT_DECAY1_2 = 100;
+const int HDT_DECAY2_1 = 286;
+const int HDT_DECAY2_2 = 575;
+const int PIEZO_MAX_VALUE = 750;
+
 // Analogue inputs.
 class AnalogueInput {
   public:
@@ -109,9 +118,6 @@ AnalogueInput* analogue_inputs[] = {
 
 const int LED_1_PIN = 8;
 const int LED_2_PIN = 7;
-const int PIEZO_PEAK_THRESHOLD = 1000;
-const int PIEZO_HIT_THRESHOLD = 700;
-const long PIEZO_GATHER_MILLIS = 20;
 
 class Piezo {
   public:
@@ -121,10 +127,10 @@ class Piezo {
     int led_pin;
 
     bool is_peaking;
-    int piezo_level;
-    int last_piezo_level;
+    uint16_t piezo_level;
+    uint16_t last_hit_level;
 
-    bool seen_peak;
+    bool hit_detected;
     unsigned long gathering_start;
     unsigned long gather_until;
     unsigned long total_energy;
@@ -132,8 +138,8 @@ class Piezo {
 
     Piezo(const char *name, int piezo_pin, int led_pin)
       : piezo_pin(piezo_pin), led_pin(led_pin), is_peaking(false),
-        seen_peak(false), gather_until(0), total_energy(0),
-        hit_threshold(PIEZO_HIT_THRESHOLD)
+        hit_detected(false), gather_until(0), total_energy(0),
+        hit_threshold(10)
     {
       strncpy(this->name, name, 16);
       this->name[15] = 0;
@@ -299,52 +305,64 @@ void button_value_changed(int value, int input_pin) {
 }
 
 
-void Piezo::update()
-{
-  unsigned long now = millis();
-
-  last_piezo_level = piezo_level;
-  piezo_level = analogRead(piezo_pin);
-
-  if (!seen_peak && last_piezo_level > hit_threshold && piezo_level < last_piezo_level) {
-    seen_peak = true;
-    gather_until = now + PIEZO_GATHER_MILLIS;
-    total_energy = last_piezo_level;
-    hit_threshold = last_piezo_level;
-
-#ifdef DEBUG
-    Serial.print("Piezo ");
-    Serial.print(name);
-    Serial.print(" was hit at level ");
-    Serial.println(last_piezo_level);
-#endif
-  }
-
-  if (seen_peak) {
-    total_energy += piezo_level;
-    float avg_energy = float(total_energy) / PIEZO_GATHER_MILLIS;
-
-    if (now > gather_until) {
-      seen_peak = false;
-      hit_threshold = PIEZO_HIT_THRESHOLD;
-#ifdef DEBUG
-      Serial.print("Average energy gathered in this hit: ");
-      Serial.println(avg_energy);
-#endif
-      int midi_velo = min(0x7F * avg_energy / PIEZO_HIT_THRESHOLD, 0x7F);
-      send_midi_note(midi_velo);
-    }
-  }
-
-
-  digitalWrite(LED_1_PIN, seen_peak ? HIGH : LOW);
+// Compares times without being prone to problems when the micros() counter overflows, every ~70 mins
+bool timeGreaterOrEqual(uint32_t lhs, uint32_t rhs) {
+    return (((lhs - rhs) & 0xffffffff) >= 0x3fffffff);
 }
 
+uint32_t last_report_time = 0;
+
+void Piezo::update()
+{
+    piezo_level = analogRead(piezo_pin);
+
+    hit_detected = piezo_level > hit_threshold;
+    if (hit_detected) {
+        uint32_t startReadingTime = micros();
+
+        // For the next few milliseconds, look out for the highest "spike" in the reading
+        // from the piezo. Its height is representative of the hit's velocity.
+        do {
+            if (piezo_level > last_hit_level) {
+                last_hit_level = piezo_level;
+            }
+            piezo_level = analogRead(piezo_pin);
+        } while (timeGreaterOrEqual(startReadingTime + HDT_READ_PEAK_DURATION, micros()));
+
+        #ifdef DEBUG
+        Serial.print("Piezo '");
+        Serial.print(name);
+        Serial.print("' was hit at level ");
+        Serial.println(last_hit_level);
+        #endif
+
+        hit_threshold = piezo_level;
+
+        int midi_velo = min(0x7F * last_hit_level / PIEZO_MAX_VALUE, 0x7F);
+        send_midi_note(midi_velo);
+    }
+
+    #ifdef DEBUG
+    if (timeGreaterOrEqual(last_report_time + 1000000, micros())) {
+        Serial.print(micros());
+        Serial.print(" -- threshold is now ");
+        Serial.print(hit_threshold);
+        Serial.println("");
+        last_report_time = micros();
+    }
+    #endif
+
+    digitalWrite(LED_1_PIN, hit_detected ? HIGH : LOW);
+}
 
 void setup() {
 #ifdef DEBUG
   Serial.begin(115200);
-  Serial.println("Yay!");
+  Serial.println("Yay! This is Sybren's Jomox interface");
+  #ifndef DO_MIDI
+  Serial.println("MIDI has been disabled for debugging purposes.");
+  #endif
+
 #else
 #ifdef DO_MIDI
   MIDI.begin(MIDI_CHANNEL);
