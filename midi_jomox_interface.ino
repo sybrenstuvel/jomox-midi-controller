@@ -24,14 +24,9 @@ const int MIDI_CHANNEL = 10;  // base-1
 const int NOTE_NUMBER = 38;
 
 // Hit detection threshold values
-const int HDT_READ_PEAK_DURATION = 800; // in microseconds
-const uint32_t HDT_MIDPOINT = 50000;  // time in microseconds since hit
-const int HDT_DECAY1_1 = 77;
-const int HDT_DECAY1_2 = 100;
-const int HDT_DECAY2_1 = 286;
-const int HDT_DECAY2_2 = 575;
-const uint16_t PIEZO_MAX_VALUE = 765;
-const int32_t HDT_MIN_THRESHOLD = 3;
+const int HDT_READ_PEAK_DURATION = 5000; // in microseconds
+const uint16_t PIEZO_MAX_VALUE = 500;
+const int32_t HDT_MIN_THRESHOLD = 10;
 
 // Analogue inputs.
 class AnalogueInput {
@@ -96,6 +91,8 @@ AnalogueInput gate("gate", INPUT_BLOCK_RIGHT, 6, 114, 3, false);
 AnalogueInput lfo_select("lfo_select", INPUT_BLOCK_RIGHT, 7, 120, 3, false);
 AnalogueInput lfo_one_shot("lfo_one_shot", INPUT_BLOCK_RIGHT, 5, 123, 3, false);
 
+AnalogueInput threshold_decay("threshold_decay", A3, 0, 0, 0, false);
+
 AnalogueInput* analogue_inputs[] = {
   &m1_pitch,
   &m1_dampen,
@@ -113,6 +110,7 @@ AnalogueInput* analogue_inputs[] = {
   &gate,
   &lfo_select,
   &lfo_one_shot,
+  &threshold_decay,
   NULL
 };
 
@@ -213,6 +211,9 @@ void AnalogueInput::update()
   // Don't bother sending out small updates.
   if (fabs(smoothed_value - last_smoothed_value) < 2) return;
   last_smoothed_value = smoothed_value;
+
+  // Channel 0 means "don't send MIDI at all"
+  if (midi_cc == 0) return;
 
   // Compute which value to send over the MIDI channel.
   last_midi_value = midi_value;
@@ -335,19 +336,11 @@ void Piezo::update()
             start_hit_detect_time + HDT_READ_PEAK_DURATION >= now);
 
         #ifdef DEBUG
-        uint32_t end_hit_detect_time = micros();
-        Serial.print(end_hit_detect_time);
+        Serial.print(micros());
         Serial.print(": Piezo '");
         Serial.print(name);
         Serial.print("' was hit at level ");
-        Serial.print(last_hit_level);
-        Serial.print("; detection should take from ");
-        Serial.print(start_hit_detect_time);
-        Serial.print(" until ");
-        Serial.print(start_hit_detect_time + HDT_READ_PEAK_DURATION);
-        Serial.print("; but actually took ");
-        Serial.println(end_hit_detect_time - start_hit_detect_time);
-        Serial.flush();
+        Serial.println(last_hit_level);
         #endif
 
         hit_threshold = max(last_hit_level, PIEZO_MAX_VALUE);
@@ -359,21 +352,9 @@ void Piezo::update()
     }
     else if (hit_threshold > HDT_MIN_THRESHOLD) {
         // Lower threshold dynamically, taking care of time that can wrap around.
-        int32_t delta;
-
-        // delta = time_since_hit / HDT_DECAY1_1 + HDT_DECAY1_2;
-        if (time_since_hit < HDT_MIDPOINT) {
-            delta = time_since_hit / HDT_DECAY1_1 + HDT_DECAY1_2;
-        }
-        else {
-            delta = time_since_hit / HDT_DECAY2_1 + HDT_DECAY2_2;
-        }
-
-        // #ifdef DEBUG
-        // Serial.print(time_since_hit);
-        // Serial.print(" -- unscaled delta is ");
-        // Serial.print(delta);
-        // #endif
+        float decay_factor = threshold_decay.last_smoothed_value / 100.0f;
+        int32_t time_since_detect = time_since_hit - HDT_READ_PEAK_DURATION;
+        int32_t delta = decay_factor * time_since_detect / 1000;
 
         // The HDT_DECAYX_Y values are determined under the assumption of
         // a hit level of 1000, so we have to factor that in.
@@ -385,12 +366,7 @@ void Piezo::update()
             hit_threshold = last_hit_level - delta;
         }
 
-        #ifdef DEBUG
-        // Serial.print(" -- scaled delta is ");
-        // Serial.print(delta);
-        // Serial.println("*");
-        // last_report_time = 0;
-        #endif
+        last_report_time = 0;
     }
 
     #ifdef DEBUG
@@ -399,10 +375,14 @@ void Piezo::update()
         Serial.print(last_report_time);
         Serial.print(" -- threshold is now ");
         Serial.print(hit_threshold);
+        Serial.print(" -- threshold decay ");
+        Serial.print(threshold_decay.last_smoothed_value  / 100.0f);
         Serial.println("");
     }
     #endif
 
+    if (hit_detected) {
+    }
     digitalWrite(LED_1_PIN, hit_detected ? HIGH : LOW);
 }
 
@@ -413,7 +393,6 @@ void setup() {
   #ifndef DO_MIDI
   Serial.println("MIDI has been disabled for debugging purposes.");
   #endif
-
 #else
 #ifdef DO_MIDI
   MIDI.begin(MIDI_CHANNEL);
