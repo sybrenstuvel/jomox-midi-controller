@@ -64,8 +64,8 @@ class AnalogueInput {
     void reset();
 };
 
-#define INPUT_BLOCK_LEFT 18
-#define INPUT_BLOCK_RIGHT 19
+#define INPUT_BLOCK_LEFT A4
+#define INPUT_BLOCK_RIGHT A5
 
 // Row 1
 AnalogueInput m1_pitch("m1_pitch", INPUT_BLOCK_LEFT, 2, 90);
