@@ -1,4 +1,4 @@
-// #define DEBUG
+//#define DEBUG
 #define DO_MIDI
 
 #if !defined(DEBUG) && defined(DO_MIDI)
@@ -67,29 +67,29 @@ class AnalogueInput {
 #define INPUT_BLOCK_LEFT A4
 #define INPUT_BLOCK_RIGHT A5
 
-// Row 1
-AnalogueInput m1_pitch("m1_pitch", INPUT_BLOCK_LEFT, 2, 90);
-AnalogueInput m1_dampen("m1_dampen", INPUT_BLOCK_LEFT, 1, 92);
+// Column 1
+AnalogueInput m1_pitch("m1_pitch", INPUT_BLOCK_LEFT, 7, 90);
+AnalogueInput m1_dampen("m1_dampen", INPUT_BLOCK_LEFT, 5, 92);
 AnalogueInput m12_coupling("m12_coupling", INPUT_BLOCK_LEFT, 0, 100);
 AnalogueInput lfo_wave("lfo_wave", INPUT_BLOCK_LEFT, 3, 119, 7, false);
 
-// Row 2
-AnalogueInput m2_pitch("m2_pitch", INPUT_BLOCK_LEFT, 4, 94);
-AnalogueInput m2_dampen("m2_dampen", INPUT_BLOCK_LEFT, 6, 96);
-AnalogueInput m21_coupling("m21_coupling", INPUT_BLOCK_LEFT, 7, 102);
-AnalogueInput lfo_intensity("lfo_intensity", INPUT_BLOCK_LEFT, 5, 121, 3, false);
+// Column 2
+AnalogueInput m2_pitch("m2_pitch", INPUT_BLOCK_LEFT, 6, 94);
+AnalogueInput m2_dampen("m2_dampen", INPUT_BLOCK_LEFT, 4, 96);
+AnalogueInput m21_coupling("m21_coupling", INPUT_BLOCK_LEFT, 1, 102);
+AnalogueInput lfo_intensity("lfo_intensity", INPUT_BLOCK_LEFT, 2, 121, 3, false);
 
-// Row 3
-AnalogueInput noise("noise", INPUT_BLOCK_RIGHT, 2, 109, 3, false);
-AnalogueInput noise_filter("noise_filter", INPUT_BLOCK_RIGHT, 1, 112, 3, false);
-AnalogueInput metal_noise_a("metal_noise_a", INPUT_BLOCK_RIGHT, 0, 106);
-AnalogueInput lfo_speed("lfo_speed", INPUT_BLOCK_RIGHT, 3, 122, 3, false);
+// Column 3
+AnalogueInput noise("noise", INPUT_BLOCK_RIGHT, 7, 109, 3, false);
+AnalogueInput noise_filter("noise_filter", INPUT_BLOCK_RIGHT, 5, 112, 3, false);
+AnalogueInput metal_noise_a("metal_noise_a", INPUT_BLOCK_RIGHT, 3, 106);
+AnalogueInput lfo_speed("lfo_speed", INPUT_BLOCK_RIGHT, 0, 122, 3, false);
 
-// Row 4
-AnalogueInput decay("decay", INPUT_BLOCK_RIGHT, 4, 110, 3, false);
-AnalogueInput gate("gate", INPUT_BLOCK_RIGHT, 6, 114, 3, false);
-AnalogueInput lfo_select("lfo_select", INPUT_BLOCK_RIGHT, 7, 120, 3, false);
-AnalogueInput lfo_one_shot("lfo_one_shot", INPUT_BLOCK_RIGHT, 5, 123, 3, false);
+// Column 4
+AnalogueInput decay("decay", INPUT_BLOCK_RIGHT, 6, 110, 3, false);
+AnalogueInput gate("gate", INPUT_BLOCK_RIGHT, 4, 114, 3, false);
+AnalogueInput lfo_select("lfo_select", INPUT_BLOCK_RIGHT, 1, 120, 3, false);
+AnalogueInput lfo_one_shot("lfo_one_shot", INPUT_BLOCK_RIGHT, 2, 123, 3, false);
 
 AnalogueInput threshold_decay("threshold_decay", A3, 0, 0, 0, false);
 
