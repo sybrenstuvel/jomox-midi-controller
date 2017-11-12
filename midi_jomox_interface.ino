@@ -26,7 +26,7 @@ const int NOTE_NUMBER = 38;
 // Hit detection threshold values
 const int HDT_READ_PEAK_DURATION = 5000; // in microseconds
 const uint16_t PIEZO_MAX_VALUE = 500;
-const int32_t HDT_MIN_THRESHOLD = 10;
+const int32_t HDT_MIN_THRESHOLD = 30;
 
 // Analogue inputs.
 class AnalogueInput {
@@ -123,24 +123,23 @@ class Piezo {
     char name[16];
 
     int piezo_pin;
+    int reset_pin;
     int led_pin;
 
     bool is_peaking;
     uint16_t piezo_level;
+    uint16_t last_level;
     uint16_t last_hit_level;
     uint32_t hit_detect_time;
     uint32_t time_since_hit;
 
     bool hit_detected;
-    unsigned long gathering_start;
-    unsigned long gather_until;
-    unsigned long total_energy;
     unsigned int hit_threshold;
 
-    Piezo(const char *name, int piezo_pin, int led_pin)
-      : piezo_pin(piezo_pin), led_pin(led_pin), is_peaking(false),
-        hit_detected(false), gather_until(0), total_energy(0),
-        hit_threshold(HDT_MIN_THRESHOLD)
+    Piezo(const char *name, int piezo_pin, int reset_pin, int led_pin)
+      : piezo_pin(piezo_pin), reset_pin(reset_pin), led_pin(led_pin),
+        is_peaking(false), hit_detected(false), hit_threshold(HDT_MIN_THRESHOLD),
+        last_hit_level(0)
     {
       strncpy(this->name, name, 16);
       this->name[15] = 0;
@@ -149,8 +148,8 @@ class Piezo {
     void update();
 };
 
-Piezo piezo_head("head", A0, LED_1_PIN);
-Piezo piezo_rim("rim", A2, LED_2_PIN);
+Piezo piezo_head("head", A0, 3, LED_1_PIN);
+// Piezo piezo_rim("rim", A2, 4, LED_2_PIN);
 
 
 // Digital inputs.
@@ -315,40 +314,40 @@ void Piezo::update()
     piezo_level = analogRead(piezo_pin);
     time_since_hit = (micros() - hit_detect_time) & 0xffffffff;
 
-    hit_detected = piezo_level > hit_threshold;
-    if (hit_detected) {
-        last_hit_level = piezo_level;
-        uint32_t now = micros();
-        uint32_t start_hit_detect_time = now;
-        hit_detect_time = now;
+    if (piezo_level > hit_threshold) {
+        if (piezo_level > last_level) {
+            /* We're still going up in signal strength; wait until it goes down again
+             * because then we've found our peak. */
+        } else {
+            hit_detected = true;
+            last_hit_level = last_level;
+            hit_detect_time = micros();
 
-        // For the next few milliseconds, look out for the highest "spike" in the reading
-        // from the piezo. Its height is representative of the hit's velocity.
-        do {
-            piezo_level = analogRead(piezo_pin);
-            if (piezo_level > last_hit_level) {
-                last_hit_level = piezo_level;
-                hit_detect_time = micros();
-            }
-            now = micros();
-        } while (
-            start_hit_detect_time < now &&  // if this is no longer true, time looped.
-            start_hit_detect_time + HDT_READ_PEAK_DURATION >= now);
+            // Send the midi note ASAP.
+            int midi_velo = min(0x7F * (float)last_hit_level / PIEZO_MAX_VALUE, 0x7F);
+            send_midi_note(midi_velo);
 
-        #ifdef DEBUG
-        Serial.print(micros());
-        Serial.print(": Piezo '");
-        Serial.print(name);
-        Serial.print("' was hit at level ");
-        Serial.println(last_hit_level);
-        #endif
+            #ifdef DEBUG
+            Serial.print(micros());
+            Serial.print(": Piezo '");
+            Serial.print(name);
+            Serial.print("' was hit at level ");
+            Serial.println(last_hit_level);
+            #endif
 
-        hit_threshold = max(last_hit_level, PIEZO_MAX_VALUE);
-        time_since_hit = 0;
-        last_report_time = 0;
+            // Reset the peak detector.
+            digitalWrite(3, HIGH);
+            do {
+                Serial.write('.');
+                delay(10);
+            } while((piezo_level = analogRead(piezo_pin)) > HDT_MIN_THRESHOLD);
+            Serial.write('\n');
+            digitalWrite(3, LOW);
 
-        int midi_velo = min(0x7F * (float)last_hit_level / PIEZO_MAX_VALUE, 0x7F);
-        send_midi_note(midi_velo);
+            hit_threshold = max(last_hit_level, PIEZO_MAX_VALUE);
+            time_since_hit = 0;
+            last_report_time = 0;
+        }
     }
     else if (hit_threshold > HDT_MIN_THRESHOLD) {
         // Lower threshold dynamically, taking care of time that can wrap around.
@@ -366,13 +365,15 @@ void Piezo::update()
             hit_threshold = last_hit_level - delta;
         }
 
-        last_report_time = 0;
+        // last_report_time = 0;
     }
 
     #ifdef DEBUG
     if (last_report_time == 0 || last_report_time + 1000000 < micros()) {
         last_report_time = micros();
         Serial.print(last_report_time);
+        Serial.print(" level is ");
+        Serial.print(piezo_level);
         Serial.print(" -- threshold is now ");
         Serial.print(hit_threshold);
         Serial.print(" -- threshold decay ");
@@ -384,6 +385,7 @@ void Piezo::update()
     if (hit_detected) {
     }
     digitalWrite(LED_1_PIN, hit_detected ? HIGH : LOW);
+    last_level = piezo_level;
 }
 
 void setup() {
