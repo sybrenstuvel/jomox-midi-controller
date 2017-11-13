@@ -370,6 +370,8 @@ void Piezo::update()
         }
 
         // last_report_time = 0;
+    } else {
+        hit_detected = false;
     }
 
     #ifdef DEBUG
