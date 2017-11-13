@@ -150,7 +150,6 @@ class Piezo {
 };
 
 Piezo piezo_head("head", A0, 3, LED_1_PIN);
-// Piezo piezo_rim("rim", A2, 4, LED_2_PIN);
 
 
 // Digital inputs.
@@ -430,4 +429,7 @@ void loop() {
 
   piezo_head.update();
   //  piezo_rim.update();
+
+  // Let the world know we're up & running.
+  digitalWrite(LED_2_PIN, HIGH);
 }
