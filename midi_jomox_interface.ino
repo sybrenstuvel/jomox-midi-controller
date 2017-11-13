@@ -10,6 +10,7 @@ MIDI_CREATE_DEFAULT_INSTANCE();
 
 const float UPDATE_ALPHA = 0.1;
 const int DEBOUNCE_DIGITAL_PIN_TIME = 50; // milliseconds
+const int TIMING_DEBUG_PIN = 5;
 
 // Multiplexer selector
 const int MPLEX_SELECT_1 = 10;
@@ -251,7 +252,10 @@ void update_controllers()
     // Reset loop
     controller_idx = 0;
     controller = analogue_inputs[0];
-  }
+    digitalWrite(TIMING_DEBUG_PIN, HIGH);
+} else {
+    digitalWrite(TIMING_DEBUG_PIN, LOW);
+}
 
   controller->update();
   controller_idx++;
@@ -410,6 +414,7 @@ void setup() {
   pinMode(MPLEX_SELECT_1, OUTPUT);
   pinMode(MPLEX_SELECT_2, OUTPUT);
   pinMode(MPLEX_SELECT_3, OUTPUT);
+  pinMode(TIMING_DEBUG_PIN, OUTPUT);
   digitalWrite(MPLEX_DISABLE, LOW);
 
   pinMode(13, OUTPUT);
