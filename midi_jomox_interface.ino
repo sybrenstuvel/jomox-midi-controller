@@ -92,7 +92,8 @@ AnalogueInput gate("gate", INPUT_BLOCK_RIGHT, 4, 114, 3, false);
 AnalogueInput lfo_select("lfo_select", INPUT_BLOCK_RIGHT, 1, 120, 3, false);
 AnalogueInput lfo_one_shot("lfo_one_shot", INPUT_BLOCK_RIGHT, 2, 123, 3, false);
 
-AnalogueInput threshold_decay("threshold_decay", A3, 0, 0, 0, false);
+// AnalogueInput threshold_decay("threshold_decay", A3, 0, 0, 0, false);
+AnalogueInput hit_sens_gamma("hit_sens_gamma", A3, 0, 0, 0, false);
 
 AnalogueInput* analogue_inputs[] = {
   &m1_pitch,
@@ -111,7 +112,8 @@ AnalogueInput* analogue_inputs[] = {
   &gate,
   &lfo_select,
   &lfo_one_shot,
-  &threshold_decay,
+  // &threshold_decay,
+  &hit_sens_gamma,
   NULL
 };
 
@@ -192,6 +194,15 @@ void send_midi_note(int velocity) {
   MIDI.sendNoteOn(NOTE_NUMBER, velocity, MIDI_CHANNEL);
 #endif
 #endif
+}
+
+// Sends hit with velocity on interval [0, 1]
+void send_hit(float velocity) {
+    // Apply gamma correction, first convert Arduino value [0-1024] to [0-2]
+    float gamma = hit_sens_gamma.last_smoothed_value / 512;
+    float corrected_velo = pow(velocity, gamma);
+    int midi_velo = max(0, min(0x7F * corrected_velo, 0x7F));
+    send_midi_note(midi_velo);
 }
 
 void AnalogueInput::update()
@@ -302,7 +313,7 @@ void read_button(int &value, int &debounced_value, int input_pin, int &last_read
 void button_value_changed(int value, int input_pin) {
   switch (input_pin) {
     case BUTTON_1_PIN:
-      send_midi_note(value ? 0x00 : 0x7F);
+      send_hit(value ? 0.0 : 0.5);
       break;
     case BUTTON_2_PIN:
       if (!value) reset_all_knobs();
@@ -327,8 +338,9 @@ void Piezo::update()
             hit_detect_time = micros();
 
             // Send the midi note ASAP.
-            int midi_velo = min(0x7F * (float)last_hit_level / PIEZO_MAX_VALUE, 0x7F);
-            send_midi_note(midi_velo);
+            // float_velo is on the interval [0, 1]
+            int float_velo = (float)last_hit_level / PIEZO_MAX_VALUE;
+            send_hit(float_velo);
 
             #ifdef DEBUG
             Serial.print(micros());
@@ -354,7 +366,8 @@ void Piezo::update()
     }
     else if (hit_threshold > HDT_MIN_THRESHOLD) {
         // Lower threshold dynamically, taking care of time that can wrap around.
-        float decay_factor = threshold_decay.last_smoothed_value / 100.0f;
+        // float decay_factor = threshold_decay.last_smoothed_value / 100.0f;
+        float decay_factor = 7.0f;
         int32_t time_since_detect = time_since_hit - HDT_READ_PEAK_DURATION;
         int32_t delta = decay_factor * time_since_detect / 1000;
 
@@ -381,8 +394,8 @@ void Piezo::update()
         Serial.print(piezo_level);
         Serial.print(" -- threshold is now ");
         Serial.print(hit_threshold);
-        Serial.print(" -- threshold decay ");
-        Serial.print(threshold_decay.last_smoothed_value  / 100.0f);
+        // Serial.print(" -- threshold decay ");
+        // Serial.print(threshold_decay.last_smoothed_value  / 100.0f);
         Serial.println("");
     }
     #endif
