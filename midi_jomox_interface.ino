@@ -26,8 +26,8 @@ const int NOTE_NUMBER = 38;
 
 // Hit detection threshold values
 const int HDT_READ_PEAK_DURATION = 5000; // in microseconds
-const uint16_t PIEZO_MAX_VALUE = 500;
-const int32_t HDT_MIN_THRESHOLD = 30;
+const uint16_t PIEZO_MAX_VALUE = 700;
+const int32_t HDT_MIN_THRESHOLD = 20;
 
 // Analogue inputs.
 class AnalogueInput {
@@ -201,6 +201,15 @@ void send_hit(float velocity) {
     // Apply gamma correction, first convert Arduino value [0-1024] to [0-2]
     float gamma = hit_sens_gamma.last_smoothed_value / 512;
     float corrected_velo = pow(velocity, gamma);
+#ifdef DEBUG
+    Serial.print("velo = ");
+    Serial.print(velocity);
+    Serial.print("; gamma = ");
+    Serial.print(gamma);
+    Serial.print("; corrected = ");
+    Serial.println(corrected_velo);
+#endif
+
     int midi_velo = max(0, min(0x7F * corrected_velo, 0x7F));
     send_midi_note(midi_velo);
 }
@@ -339,8 +348,8 @@ void Piezo::update()
 
             // Send the midi note ASAP.
             // float_velo is on the interval [0, 1]
-            int float_velo = (float)last_hit_level / PIEZO_MAX_VALUE;
-            send_hit(float_velo);
+            float float_velo = (float)(last_hit_level - HDT_MIN_THRESHOLD) / (PIEZO_MAX_VALUE - HDT_MIN_THRESHOLD);
+            send_hit(min(1.0f, max(0.0f, float_velo)));
 
             #ifdef DEBUG
             Serial.print(micros());
